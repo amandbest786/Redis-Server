@@ -24,12 +24,15 @@ const server = net.createServer(connection => {
                 case 'set':
                     connection.write(setCommand(DB, key, value, ttl));
                     console.log(DB.db);
+                    console.log(process.memoryUsage());
                     break;
                 case 'get':
                     connection.write(getCommand(DB, key));
+                    console.log(process.memoryUsage());
                     break;
                 case 'del':
                     connection.write(deleteCommand(DB, key));
+                    console.log(process.memoryUsage());
                     break;
                 default:
                     connection.write(`-ERR unknown command "${command}"\r\n`);
