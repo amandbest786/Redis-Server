@@ -2,56 +2,70 @@ const net = require('net');
 const Parser = require('redis-parser');
 
 let DB = {};
-// $45\r\n {"name":"AMAN","age":24,"location":"BANGALORE"}\r\n
 
 const server = net.createServer(connection => {
     console.log('Server created.');
 
     const parser = new Parser({
         returnReply: (data) => {
-            switch (data[0]) {
-                case 'SET':
-                    const value = JSON.parse(JSON.stringify(data[2])); // Parse the value, as it is a String.
-                    const key = data[1];
+            const command = data[0]?.toLowerCase();
+            const key = data[1];
+            const value = data[2];
+
+            if (!command || !key) {
+                connection.write('-ERR missing command or key\r\n');
+                return;
+            }
+
+            switch (command) {
+                case 'set':
                     DB[key] = value;
-                    console.log(DB);
+
+                    if (data[3]?.toLowerCase() === 'ex' && !isNaN(data[4])) {
+                        const ttl = Number(data[4]);
+                        console.log(`Setting key "${key}" with expiration of ${ttl} seconds.`);
+
+                        setTimeout(() => {
+                            delete DB[key];
+                        }, ttl * 1000);
+                    }
+
                     connection.write('+OK\r\n');
                     break;
-                case 'GET':
-                    const ask = DB[data[1]];
-                    if (ask !== undefined) {
-                        connection.write(`$${ask.length}\r\n${ask}\r\n`);
+
+                case 'get':
+                    if (key in DB) {
+                        const storedValue = DB[key];
+                        connection.write(`$${storedValue.length}\r\n${storedValue}\r\n`);
                     } else {
-                        connection.write('$-1\r\n');
+                        connection.write('$-1\r\n'); // Key not found
                     }
                     break;
+
                 default:
-                    connection.write('-ERR unknown command\r\n');
+                    connection.write(`-ERR unknown command "${command}"\r\n`);
             }
         },
         returnError: (err) => {
-            console.log(err);
+            console.log('Error parsing data:', err.message);
+            connection.write('-ERR parsing error\r\n');
         }
     });
 
     connection.on('data', (bufferData) => {
-        parser.execute(bufferData);
+        try {
+            parser.execute(bufferData);
+        } catch (err) {
+            console.log('Error during execution:', err.message);
+            connection.write('-ERR execution error\r\n');
+        }
     });
 
-    connection.on('error', function (err) {
-        console.log('Error from server:', err.message);
+    connection.on('error', (err) => {
+        console.log('Connection error:', err.message);
     });
-
-    connection.write('+OK\r\n'); // Initial acknowledgment when the connection is established
 });
 
-server.listen(6378, () => {
-    console.log('Server Running at PORT:6378');
+server.listen(8090, () => {
+    console.log('Server Running at PORT:8090');
 });
-
-
-
-// to improve
-// 1. setting the simple string as string, and any object as object only, not in string format.
-// 2. Check whether why the swaitch case is not working, as in first input, if it is a get request also. it returns OK.
-// 3. scale this up
