@@ -2,7 +2,8 @@ const net = require('net');
 const Parser = require('redis-parser');
 const setCommand = require('./commands/setCommand');
 const getCommand = require('./commands/getCommand');
-const DB = require('./db').db; // Import DB
+const deleteCommand = require('./commands/deleteCommand');
+const DB = require('./db');
 
 const server = net.createServer(connection => {
     console.log('Server created.');
@@ -22,9 +23,13 @@ const server = net.createServer(connection => {
             switch (command) {
                 case 'set':
                     connection.write(setCommand(DB, key, value, ttl));
+                    console.log(DB.db);
                     break;
                 case 'get':
                     connection.write(getCommand(DB, key));
+                    break;
+                case 'del':
+                    connection.write(deleteCommand(DB, key));
                     break;
                 default:
                     connection.write(`-ERR unknown command "${command}"\r\n`);
