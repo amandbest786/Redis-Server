@@ -1,7 +1,8 @@
 const net = require('net');
 const Parser = require('redis-parser');
-
-let DB = {};
+const setCommand = require('./commands/setCommand');
+const getCommand = require('./commands/getCommand');
+const DB = require('./db').db; // Import DB
 
 const server = net.createServer(connection => {
     console.log('Server created.');
@@ -11,6 +12,7 @@ const server = net.createServer(connection => {
             const command = data[0]?.toLowerCase();
             const key = data[1];
             const value = data[2];
+            const ttl = data[4] && !isNaN(data[4]) ? Number(data[4]) : null;
 
             if (!command || !key) {
                 connection.write('-ERR missing command or key\r\n');
@@ -19,29 +21,11 @@ const server = net.createServer(connection => {
 
             switch (command) {
                 case 'set':
-                    DB[key] = value;
-
-                    if (data[3]?.toLowerCase() === 'ex' && !isNaN(data[4])) {
-                        const ttl = Number(data[4]);
-                        console.log(`Setting key "${key}" with expiration of ${ttl} seconds.`);
-
-                        setTimeout(() => {
-                            delete DB[key];
-                        }, ttl * 1000);
-                    }
-
-                    connection.write('+OK\r\n');
+                    connection.write(setCommand(DB, key, value, ttl));
                     break;
-
                 case 'get':
-                    if (key in DB) {
-                        const storedValue = DB[key];
-                        connection.write(`$${storedValue.length}\r\n${storedValue}\r\n`);
-                    } else {
-                        connection.write('$-1\r\n'); // Key not found
-                    }
+                    connection.write(getCommand(DB, key));
                     break;
-
                 default:
                     connection.write(`-ERR unknown command "${command}"\r\n`);
             }
